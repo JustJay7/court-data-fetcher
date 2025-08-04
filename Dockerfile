@@ -1,11 +1,10 @@
 FROM golang:1.23-alpine AS builder
 
-RUN apk add --no-cache git gcc musl-dev sqlite-dev
+RUN apk add --no-cache git gcc musl-dev libc6-compat sqlite-dev
 
 WORKDIR /app
 
 COPY go.mod go.sum ./
-
 RUN go mod download
 
 COPY . .
@@ -14,7 +13,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o court-data-fetche
 
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates chromium chromium-chromedriver
+RUN apk --no-cache add ca-certificates chromium chromium-chromedriver libc6-compat
 
 RUN addgroup -g 1000 -S appuser && \
     adduser -u 1000 -S appuser -G appuser
@@ -22,7 +21,6 @@ RUN addgroup -g 1000 -S appuser && \
 WORKDIR /app
 
 COPY --from=builder /app/court-data-fetcher .
-
 COPY --from=builder /app/web ./web
 
 RUN mkdir -p data && chown -R appuser:appuser /app

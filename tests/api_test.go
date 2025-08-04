@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/yourusername/court-data-fetcher/internal/api"
-	"github.com/yourusername/court-data-fetcher/internal/cache"
-	"github.com/yourusername/court-data-fetcher/internal/config"
-	"github.com/yourusername/court-data-fetcher/internal/database"
-	"github.com/yourusername/court-data-fetcher/pkg/logger"
+	"github.com/JustJay7/court-data-fetcher/internal/api"
+	"github.com/JustJay7/court-data-fetcher/internal/cache"
+	"github.com/JustJay7/court-data-fetcher/internal/config"
+	"github.com/JustJay7/court-data-fetcher/internal/database"
+	"github.com/JustJay7/court-data-fetcher/pkg/logger"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

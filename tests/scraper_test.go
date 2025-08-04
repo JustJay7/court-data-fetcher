@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourusername/court-data-fetcher/internal/config"
-	"github.com/yourusername/court-data-fetcher/internal/scraper"
-	"github.com/yourusername/court-data-fetcher/pkg/logger"
+	"github.com/JustJay7/court-data-fetcher/internal/config"
+	"github.com/JustJay7/court-data-fetcher/internal/scraper"
+	"github.com/JustJay7/court-data-fetcher/pkg/logger"
 )
 
 func TestScraperInitialization(t *testing.T) {
