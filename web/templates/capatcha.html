@@ -1,0 +1,111 @@
+{{define "content"}}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h4 class="mb-0">
+                    <i class="bi bi-shield-lock"></i> Manual CAPTCHA Solving
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <p class="text-muted">Please solve the CAPTCHA below to help with case searches</p>
+                    <img id="captchaImage" src="" alt="CAPTCHA" class="img-fluid border p-2 bg-light">
+                </div>
+                
+                <form id="captchaSolveForm">
+                    <div class="mb-3">
+                        <label for="captchaSolution" class="form-label">Enter CAPTCHA Text:</label>
+                        <input type="text" class="form-control form-control-lg text-center" 
+                               id="captchaSolution" required autofocus
+                               placeholder="Type the characters you see">
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-check-circle"></i> Submit Solution
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="refreshCaptcha()">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh Image
+                        </button>
+                    </div>
+                </form>
+                
+                <div id="successMessage" class="alert alert-success mt-3 d-none">
+                    <i class="bi bi-check-circle-fill"></i> Solution submitted successfully!
+                </div>
+                
+                <div id="errorMessage" class="alert alert-danger mt-3 d-none">
+                    <i class="bi bi-x-circle-fill"></i> <span id="errorText"></span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">Tips for Solving CAPTCHAs</h5>
+                <ul class="mb-0">
+                    <li>Look carefully at each character</li>
+                    <li>CAPTCHAs are usually case-sensitive</li>
+                    <li>If you can't read it clearly, refresh for a new one</li>
+                    <li>Some characters like 0 (zero) and O (letter) can look similar</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Get CAPTCHA ID from URL
+const urlParams = new URLSearchParams(window.location.search);
+const captchaId = urlParams.get('id');
+
+if (captchaId) {
+    document.getElementById('captchaImage').src = `/api/captcha/${captchaId}`;
+}
+
+// Handle form submission
+document.getElementById('captchaSolveForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const solution = document.getElementById('captchaSolution').value;
+    
+    try {
+        const response = await fetch(`/api/captcha/${captchaId}/solve`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ solution: solution })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('successMessage').classList.remove('d-none');
+            document.getElementById('errorMessage').classList.add('d-none');
+            document.getElementById('captchaSolution').value = '';
+            
+            // Auto-close after 2 seconds
+            setTimeout(() => {
+                if (window.opener) {
+                    window.close();
+                }
+            }, 2000);
+        } else {
+            throw new Error(data.error || 'Failed to submit solution');
+        }
+    } catch (error) {
+        document.getElementById('errorText').textContent = error.message;
+        document.getElementById('errorMessage').classList.remove('d-none');
+        document.getElementById('successMessage').classList.add('d-none');
+    }
+});
+
+// Refresh CAPTCHA image
+function refreshCaptcha() {
+    const img = document.getElementById('captchaImage');
+    img.src = img.src + '&t=' + new Date().getTime();
+}
+</script>
+{{end}}

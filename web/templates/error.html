@@ -1,0 +1,20 @@
+{{define "content"}}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> Error
+                </h4>
+            </div>
+            <div class="card-body text-center">
+                <i class="bi bi-x-circle text-danger" style="font-size: 4rem;"></i>
+                <p class="mt-3 mb-4">{{.error}}</p>
+                <a href="/" class="btn btn-primary">
+                    <i class="bi bi-arrow-left"></i> Back to Search
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

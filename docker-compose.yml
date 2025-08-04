@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - DATABASE_PATH=/app/data/court_cases.db
+      - LOG_LEVEL=info
+      - CACHE_SIZE=1000
+      - CACHE_TTL=30
+      - COURT_BASE_URL=https://districts.ecourts.gov.in/delhi
+      - SCRAPER_TIMEOUT=30
+      - HEADLESS_MODE=true
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    networks:
+      - court-network
+
+networks:
+  court-network:
+    driver: bridge

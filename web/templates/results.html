@@ -1,0 +1,169 @@
+{{define "content"}}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Case Details</li>
+            </ol>
+        </nav>
+
+        {{if .fromCache}}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> This result was loaded from cache for faster access.
+        </div>
+        {{end}}
+
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-file-text"></i> Case Information
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th width="40%">Case Number:</th>
+                                <td><strong>{{.case.CaseNumber}}</strong></td>
+                            </tr>
+                            <tr>
+                                <th>Case Type:</th>
+                                <td>{{.case.CaseType}}</td>
+                            </tr>
+                            <tr>
+                                <th>Filing Year:</th>
+                                <td>{{.case.FilingYear}}</td>
+                            </tr>
+                            <tr>
+                                <th>Filing Date:</th>
+                                <td>{{if .case.FilingDate.IsZero}}-{{else}}{{.case.FilingDate.Format "02-01-2006"}}{{end}}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th width="40%">Status:</th>
+                                <td>
+                                    {{if .case.Status}}
+                                        <span class="badge bg-{{if eq .case.Status "Disposed"}}secondary{{else}}success{{end}}">
+                                            {{.case.Status}}
+                                        </span>
+                                    {{else}}-{{end}}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Next Hearing:</th>
+                                <td>
+                                    {{if .case.NextHearing.IsZero}}-{{else}}
+                                        <strong class="text-danger">{{.case.NextHearing.Format "02-01-2006"}}</strong>
+                                    {{end}}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Judge:</th>
+                                <td>{{if .case.Judge}}{{.case.Judge}}{{else}}-{{end}}</td>
+                            </tr>
+                            <tr>
+                                <th>Court Complex:</th>
+                                <td>{{if .case.CourtComplex}}{{.case.CourtComplex}}{{else}}-{{end}}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{if .case.Parties}}
+        <div class="card shadow mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-people"></i> Parties
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Name</th>
+                                <th>Advocate</th>
+                                <th>Advocate Code</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .case.Parties}}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-{{if eq .Type "Petitioner"}}primary{{else}}warning{{end}}">
+                                        {{.Type}}
+                                    </span>
+                                </td>
+                                <td>{{.Name}}</td>
+                                <td>{{if .AdvocateName}}{{.AdvocateName}}{{else}}-{{end}}</td>
+                                <td>{{if .AdvocateCode}}{{.AdvocateCode}}{{else}}-{{end}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {{end}}
+
+        {{if .case.Orders}}
+        <div class="card shadow mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-file-earmark-pdf"></i> Orders / Judgments
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Judge</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .case.Orders}}
+                            <tr>
+                                <td>{{.OrderDate.Format "02-01-2006"}}</td>
+                                <td>{{.Description}}</td>
+                                <td>{{if .JudgeName}}{{.JudgeName}}{{else}}-{{end}}</td>
+                                <td>
+                                    {{if .PDFLink}}
+                                    <a href="{{.PDFLink}}" target="_blank" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-download"></i> Download PDF
+                                    </a>
+                                    {{else}}
+                                    <span class="text-muted">Not available</span>
+                                    {{end}}
+                                </td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {{end}}
+
+        <div class="d-flex justify-content-between">
+            <a href="/" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> New Search
+            </a>
+            <button onclick="window.print()" class="btn btn-outline-primary">
+                <i class="bi bi-printer"></i> Print
+            </button>
+        </div>
+    </div>
+</div>
+{{end}}
