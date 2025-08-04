@@ -1,34 +1,55 @@
-FROM golang:1.23-alpine AS builder
+# Build stage
+FROM golang:1.21-bullseye AS builder
 
-RUN apk add --no-cache git gcc musl-dev libc6-compat sqlite-dev
-
+# Set working directory
 WORKDIR /app
 
+# Copy go mod files
 COPY go.mod go.sum ./
+
+# Download dependencies
 RUN go mod download
 
+# Copy source code
 COPY . .
 
+# Build the application
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o court-data-fetcher cmd/server/main.go
 
-FROM alpine:latest
+# Runtime stage
+FROM debian:bullseye-slim
 
-RUN apk --no-cache add ca-certificates chromium chromium-chromedriver libc6-compat
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    chromium \
+    chromium-driver \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN addgroup -g 1000 -S appuser && \
-    adduser -u 1000 -S appuser -G appuser
+# Create non-root user
+RUN useradd -m -u 1000 appuser
 
+# Set working directory
 WORKDIR /app
 
+# Copy binary from builder
 COPY --from=builder /app/court-data-fetcher .
+
+# Copy web assets
 COPY --from=builder /app/web ./web
 
+# Create data directory
 RUN mkdir -p data && chown -R appuser:appuser /app
 
+# Switch to non-root user
 USER appuser
 
+# Expose port
 EXPOSE 8080
 
-ENV ROD_BROWSER_PATH=/usr/bin/chromium-browser
+# Set environment variables
+ENV ROD_BROWSER_PATH=/usr/bin/chromium
 
+# Run the application
 CMD ["./court-data-fetcher"]
