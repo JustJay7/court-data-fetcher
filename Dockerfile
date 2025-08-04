@@ -1,7 +1,5 @@
-# Build stage
-FROM golang:1.21-bullseye AS builder
+FROM golang:1.23-bookworm AS builder
 
-# Set working directory
 WORKDIR /app
 
 # Copy go mod files
@@ -17,10 +15,10 @@ COPY . .
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o court-data-fetcher cmd/server/main.go
 
 # Runtime stage
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
+# Install dependencies and apply security updates
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     ca-certificates \
     chromium \
     chromium-driver \
