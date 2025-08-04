@@ -14,6 +14,29 @@
         </div>
         {{end}}
 
+        <!-- Query Log Information -->
+        {{if .queryLog}}
+        <div class="card shadow mb-3">
+            <div class="card-header bg-secondary text-white">
+                <h6 class="mb-0">
+                    <i class="bi bi-clock-history"></i> Query Information
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <small class="text-muted">Query Time: {{.queryLog.QueryTime.Format "02-01-2006 15:04:05"}}</small>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <a href="/api/logs/{{.queryLog.ID}}/raw" target="_blank" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-code"></i> View Raw HTML
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{end}}
+
         <div class="card shadow mb-4">
             <div class="card-header bg-primary text-white">
                 <h4 class="mb-0">
@@ -140,9 +163,14 @@
                                 <td>{{if .JudgeName}}{{.JudgeName}}{{else}}-{{end}}</td>
                                 <td>
                                     {{if .PDFLink}}
-                                    <a href="{{.PDFLink}}" target="_blank" class="btn btn-sm btn-primary">
-                                        <i class="bi bi-download"></i> Download PDF
-                                    </a>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="{{.PDFLink}}" target="_blank" class="btn btn-outline-primary" title="Open in new tab">
+                                            <i class="bi bi-box-arrow-up-right"></i> Open
+                                        </a>
+                                        <a href="/api/download/pdf?url={{.PDFLink}}" class="btn btn-primary" title="Download PDF">
+                                            <i class="bi bi-download"></i> Download
+                                        </a>
+                                    </div>
                                     {{else}}
                                     <span class="text-muted">Not available</span>
                                     {{end}}
@@ -160,10 +188,38 @@
             <a href="/" class="btn btn-secondary">
                 <i class="bi bi-arrow-left"></i> New Search
             </a>
-            <button onclick="window.print()" class="btn btn-outline-primary">
-                <i class="bi bi-printer"></i> Print
-            </button>
+            <div>
+                <button onclick="window.print()" class="btn btn-outline-primary">
+                    <i class="bi bi-printer"></i> Print
+                </button>
+                <button onclick="exportData()" class="btn btn-outline-success">
+                    <i class="bi bi-file-earmark-arrow-down"></i> Export
+                </button>
+            </div>
         </div>
     </div>
 </div>
+
+<script>
+function exportData() {
+    const caseData = {
+        caseNumber: "{{.case.CaseNumber}}",
+        caseType: "{{.case.CaseType}}",
+        filingYear: "{{.case.FilingYear}}",
+        filingDate: "{{.case.FilingDate}}",
+        status: "{{.case.Status}}",
+        nextHearing: "{{.case.NextHearing}}",
+        judge: "{{.case.Judge}}",
+        queryTime: "{{if .queryLog}}{{.queryLog.QueryTime}}{{end}}"
+    };
+    
+    const dataStr = JSON.stringify(caseData, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `case_${caseData.caseNumber.replace(/[^a-z0-9]/gi, '_')}.json`;
+    link.click();
+}
+</script>
 {{end}}

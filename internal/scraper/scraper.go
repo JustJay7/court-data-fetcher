@@ -2,10 +2,7 @@ package scraper
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +29,7 @@ func NewScraper(cfg *config.Config, logger *logger.Logger) (*Scraper, error) {
 	// Configure launcher with proper options
 	l := launcher.New().
 		Headless(cfg.HeadlessMode).
-		UserAgent(cfg.UserAgent).
+		Set("user-agent", cfg.UserAgent).
 		Set("disable-blink-features", "AutomationControlled").
 		Delete("enable-automation")
 
@@ -107,7 +104,15 @@ func (s *Scraper) SearchCase(ctx context.Context, caseType, caseNumber, filingYe
 	s.logger.Debug("Looking for case status link")
 	
 	// Click on Case Status tab if not already there
-	caseStatusTab := page.MustElements("a").FindByText("Case Status")
+	caseStatusLinks := page.MustElements("a")
+	var caseStatusTab *rod.Element
+	for _, link := range caseStatusLinks {
+		text, _ := link.Text()
+		if strings.Contains(text, "Case Status") {
+			caseStatusTab = link
+			break
+		}
+	}
 	if caseStatusTab != nil {
 		caseStatusTab.MustClick()
 		page.MustWaitNavigation()
@@ -261,9 +266,15 @@ func (s *Scraper) parseResults(page *rod.Page) (*database.CaseInfo, error) {
 // fetchAdditionalDetails fetches order details and other information
 func (s *Scraper) fetchAdditionalDetails(page *rod.Page, caseInfo *database.CaseInfo) error {
 	// Look for Orders/Judgments tab
-	ordersTab := page.MustElements("a").FindByText("Orders")
-	if ordersTab == nil {
-		ordersTab = page.MustElements("a").FindByText("Judgements")
+	links := page.MustElements("a")
+	var ordersTab *rod.Element
+	
+	for _, link := range links {
+		text, _ := link.Text()
+		if strings.Contains(text, "Orders") || strings.Contains(text, "Judgements") {
+			ordersTab = link
+			break
+		}
 	}
 
 	if ordersTab != nil {

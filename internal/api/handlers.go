@@ -67,14 +67,20 @@ func (h *Handlers) SearchCase(c *gin.Context) {
 	cacheKey := cache.GenerateCacheKey(req.CaseType, req.CaseNumber, req.FilingYear)
 	if cachedCase, found := h.cache.Get(cacheKey); found {
 		h.logger.Info("Cache hit", "key", cacheKey)
+		
+		// Load the query log for this cached case
+		var queryLog database.QueryLog
+		h.db.Where("id = ?", cachedCase.QueryLogID).First(&queryLog)
+		
 		c.HTML(http.StatusOK, "results.html", gin.H{
 			"case":      cachedCase,
+			"queryLog":  queryLog,
 			"fromCache": true,
 		})
 		return
 	}
 
-	// Create query log
+	// Create query log entry BEFORE scraping
 	queryLog := &database.QueryLog{
 		CaseType:   req.CaseType,
 		CaseNumber: req.CaseNumber,
@@ -83,18 +89,23 @@ func (h *Handlers) SearchCase(c *gin.Context) {
 		IPAddress:  c.ClientIP(),
 	}
 
+	// Save initial query log
+	if err := h.db.Create(queryLog).Error; err != nil {
+		h.logger.Error("Failed to create query log", "error", err)
+	}
+
 	// Perform scraping
 	ctx, cancel := context.WithTimeout(context.Background(), h.cfg.ScraperTimeout)
 	defer cancel()
 
 	caseInfo, rawHTML, err := h.scraper.SearchCase(ctx, req.CaseType, req.CaseNumber, req.FilingYear)
 	
-	// Update query log
+	// Update query log with results
 	queryLog.RawResponse = rawHTML
 	if err != nil {
 		queryLog.Success = false
 		queryLog.ErrorMessage = err.Error()
-		h.db.Create(queryLog)
+		h.db.Save(queryLog)
 		
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to fetch case data: " + err.Error(),
@@ -102,22 +113,71 @@ func (h *Handlers) SearchCase(c *gin.Context) {
 		return
 	}
 
+	// Update query log as successful
 	queryLog.Success = true
-	h.db.Create(queryLog)
+	h.db.Save(queryLog)
 
-	// Save case info to database
+	// Save case info to database with all relationships
 	caseInfo.QueryLogID = queryLog.ID
 	if err := h.db.Create(caseInfo).Error; err != nil {
 		h.logger.Error("Failed to save case info", "error", err)
 	}
 
+	// Save parties
+	for i := range caseInfo.Parties {
+		caseInfo.Parties[i].CaseInfoID = caseInfo.ID
+		h.db.Create(&caseInfo.Parties[i])
+	}
+
+	// Save orders
+	for i := range caseInfo.Orders {
+		caseInfo.Orders[i].CaseInfoID = caseInfo.ID
+		h.db.Create(&caseInfo.Orders[i])
+	}
+
 	// Cache the result
 	h.cache.Set(cacheKey, caseInfo)
 
-	// Render results
+	// Render results with query log
 	c.HTML(http.StatusOK, "results.html", gin.H{
 		"case":      caseInfo,
+		"queryLog":  queryLog,
 		"fromCache": false,
+	})
+}
+
+// ViewLogs displays query logs page
+func (h *Handlers) ViewLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit := 20
+	offset := (page - 1) * limit
+
+	var logs []database.QueryLog
+	var total int64
+
+	// Get total count
+	h.db.Model(&database.QueryLog{}).Count(&total)
+
+	// Fetch logs
+	h.db.Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&logs)
+
+	totalPages := int(total) / limit
+	if int(total)%limit > 0 {
+		totalPages++
+	}
+
+	c.HTML(http.StatusOK, "logs.html", gin.H{
+		"title": "Query Logs",
+		"logs":  logs,
+		"pagination": gin.H{
+			"page":       page,
+			"limit":      limit,
+			"total":      total,
+			"totalPages": totalPages,
+		},
 	})
 }
 
@@ -131,16 +191,45 @@ func (h *Handlers) ViewResults(c *gin.Context) {
 		return
 	}
 
+	// Try to find by CaseInfo ID first
 	var caseInfo database.CaseInfo
 	if err := h.db.Preload("Parties").Preload("Orders").First(&caseInfo, id).Error; err != nil {
-		c.HTML(http.StatusNotFound, "error.html", gin.H{
-			"error": "Result not found",
+		// If not found, try to find by QueryLog ID
+		var queryLog database.QueryLog
+		if err := h.db.First(&queryLog, id).Error; err != nil {
+			c.HTML(http.StatusNotFound, "error.html", gin.H{
+				"error": "Result not found",
+			})
+			return
+		}
+		
+		// Load CaseInfo from QueryLog
+		if err := h.db.Where("query_log_id = ?", queryLog.ID).
+			Preload("Parties").
+			Preload("Orders").
+			First(&caseInfo).Error; err != nil {
+			c.HTML(http.StatusNotFound, "error.html", gin.H{
+				"error": "Case information not found for this query",
+			})
+			return
+		}
+		
+		c.HTML(http.StatusOK, "results.html", gin.H{
+			"case":     &caseInfo,
+			"queryLog": &queryLog,
 		})
 		return
 	}
 
+	// Load the associated query log
+	var queryLog database.QueryLog
+	if caseInfo.QueryLogID > 0 {
+		h.db.First(&queryLog, caseInfo.QueryLogID)
+	}
+
 	c.HTML(http.StatusOK, "results.html", gin.H{
-		"case": &caseInfo,
+		"case":     &caseInfo,
+		"queryLog": &queryLog,
 	})
 }
 
@@ -351,6 +440,131 @@ func (h *Handlers) SolveCaptcha(c *gin.Context) {
 		"success": true,
 		"message": "CAPTCHA solution saved",
 	})
+}
+
+// DownloadPDF proxies PDF download from court website
+func (h *Handlers) DownloadPDF(c *gin.Context) {
+	pdfURL := c.Query("url")
+	if pdfURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "PDF URL required",
+		})
+		return
+	}
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Create request with proper headers
+	req, err := http.NewRequest("GET", pdfURL, nil)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid URL",
+		})
+		return
+	}
+
+	// Add headers to appear like a browser
+	req.Header.Set("User-Agent", h.cfg.UserAgent)
+	req.Header.Set("Referer", h.cfg.CourtBaseURL)
+
+	// Fetch the PDF
+	resp, err := client.Do(req)
+	if err != nil {
+		h.logger.Error("Failed to fetch PDF", "url", pdfURL, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to download PDF",
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check if response is OK
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "PDF not found",
+		})
+		return
+	}
+
+	// Extract filename from URL or use default
+	filename := "court_order.pdf"
+	urlParts := strings.Split(pdfURL, "/")
+	if len(urlParts) > 0 {
+		lastPart := urlParts[len(urlParts)-1]
+		if strings.HasSuffix(lastPart, ".pdf") {
+			filename = lastPart
+		}
+	}
+
+	// Set headers for file download
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("Content-Type", "application/pdf")
+
+	// Stream the PDF to client
+	written, err := io.Copy(c.Writer, resp.Body)
+	if err != nil {
+		h.logger.Error("Failed to stream PDF", "error", err)
+		return
+	}
+
+	h.logger.Info("PDF downloaded", "url", pdfURL, "size", written)
+}
+
+// GetQueryLogs returns paginated query logs
+func (h *Handlers) GetQueryLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset := (page - 1) * limit
+
+	var logs []database.QueryLog
+	var total int64
+
+	// Get total count
+	h.db.Model(&database.QueryLog{}).Count(&total)
+
+	// Fetch logs
+	h.db.Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&logs)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    logs,
+		"pagination": gin.H{
+			"page":  page,
+			"limit": limit,
+			"total": total,
+		},
+	})
+}
+
+// GetRawResponse returns the raw HTML response from a query log
+func (h *Handlers) GetRawResponse(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid ID",
+		})
+		return
+	}
+
+	var queryLog database.QueryLog
+	if err := h.db.First(&queryLog, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Query log not found",
+		})
+		return
+	}
+
+	// Return raw HTML
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, queryLog.RawResponse)
 }
 
 // Helper functions

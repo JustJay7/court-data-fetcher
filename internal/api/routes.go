@@ -21,7 +21,8 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, cache cache.Cache, scraper *sc
 	router.GET("/", h.HomePage)
 	router.POST("/search", h.SearchCase)
 	router.GET("/results/:id", h.ViewResults)
-	router.GET("/captcha", h.CaptchaPage)id", h.ViewResults)
+	router.GET("/captcha", h.CaptchaPage)
+	router.GET("/logs", h.ViewLogs)id", h.ViewResults)
 	router.GET("/captcha", h.CaptchaPage)id", h.ViewResults)
 
 	// API routes
@@ -43,6 +44,13 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, cache cache.Cache, scraper *sc
 		// CAPTCHA endpoints
 		api.GET("/captcha/:id", h.GetCaptcha)
 		api.POST("/captcha/:id/solve", h.SolveCaptcha)
+		
+		// PDF download proxy
+		api.GET("/download/pdf", h.DownloadPDF)
+		
+		// Query logs
+		api.GET("/logs", h.GetQueryLogs)
+		api.GET("/logs/:id/raw", h.GetRawResponse)
 	}
 
 	// Load HTML templates

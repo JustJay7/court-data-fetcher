@@ -174,7 +174,7 @@ func (p *Parser) parseCaseDetailsFromText(text string, caseInfo *database.CaseIn
 	
 	// Dates
 	datePattern := `(\d{1,2}[\-\/]\d{1,2}[\-\/]\d{4})`
-	dates := regexp.MustCompile(datePattern).FindAllString(text, -1)
+	// dates := regexp.MustCompile(datePattern).FindAllString(text, -1) // Removed unused variable
 	
 	// Try to identify dates by context
 	lines := strings.Split(text, "\n")
@@ -195,7 +195,7 @@ func (p *Parser) parseCaseDetailsFromText(text string, caseInfo *database.CaseIn
 
 // parseParties extracts party information from Delhi District Court format
 func (p *Parser) parseParties(page *rod.Page) ([]database.Party, error) {
-	var parties []database.Party
+	// var parties []database.Party // Removed unused variable
 	
 	// Method 1: Look for parties in table format
 	partyTable, err := page.Element("table#party_table, table.party-table, div#party_details table")
@@ -210,7 +210,11 @@ func (p *Parser) parseParties(page *rod.Page) ([]database.Party, error) {
 	}
 	
 	// Method 3: Parse from text patterns
-	bodyText, _ := page.Element("body").Text()
+	bodyElem, err := page.Element("body")
+	if err != nil {
+		return nil, err
+	}
+	bodyText, _ := bodyElem.Text()
 	return p.parsePartiesFromText(bodyText)
 }
 

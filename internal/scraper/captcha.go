@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -289,6 +290,7 @@ func (s *Scraper) solveCaptchaWithAntiCaptcha(imageData []byte, apiKey string) (
 }
 
 func (s *Scraper) waitForManualCaptchaInput(page *rod.Page) (string, error) {
+	// Show alert to user
 	page.MustEval(`() => alert("Please enter the CAPTCHA and click OK")`)
 	
 	captchaInput, err := page.Element("input[name='captcha'], input[id*='captcha']")
@@ -300,11 +302,8 @@ func (s *Scraper) waitForManualCaptchaInput(page *rod.Page) (string, error) {
 		time.Sleep(1 * time.Second)
 		
 		value, err := captchaInput.Property("value")
-		if err == nil && value != nil {
-			strValue := value.String()
-			if strValue != "" {
-				return strValue, nil
-			}
+		if err == nil && value.String() != "" {
+			return value.String(), nil
 		}
 	}
 
