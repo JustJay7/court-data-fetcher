@@ -14,7 +14,7 @@ services:
       - LOG_LEVEL=info
       - CACHE_SIZE=1000
       - CACHE_TTL=30
-      - COURT_BASE_URL=https://districts.ecourts.gov.in/delhi
+      - COURT_BASE_URL=https://delhihighcourt.nic.in
       - SCRAPER_TIMEOUT=30
       - HEADLESS_MODE=true
     volumes:

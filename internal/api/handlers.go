@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -40,6 +41,9 @@ func NewHandlers(db *gorm.DB, cache cache.Cache, scraper *scraper.Scraper, logge
 
 // HomePage renders the home page
 func (h *Handlers) HomePage(c *gin.Context) {
+	// Debug: Log when home page is accessed
+	h.logger.Info("Home page accessed", "ip", c.ClientIP())
+	
 	c.HTML(http.StatusOK, "index.html", gin.H{
 		"title":     "Court Data Fetcher",
 		"courtName": h.cfg.CourtName,
@@ -143,41 +147,6 @@ func (h *Handlers) SearchCase(c *gin.Context) {
 		"case":      caseInfo,
 		"queryLog":  queryLog,
 		"fromCache": false,
-	})
-}
-
-// ViewLogs displays query logs page
-func (h *Handlers) ViewLogs(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit := 20
-	offset := (page - 1) * limit
-
-	var logs []database.QueryLog
-	var total int64
-
-	// Get total count
-	h.db.Model(&database.QueryLog{}).Count(&total)
-
-	// Fetch logs
-	h.db.Order("created_at DESC").
-		Offset(offset).
-		Limit(limit).
-		Find(&logs)
-
-	totalPages := int(total) / limit
-	if int(total)%limit > 0 {
-		totalPages++
-	}
-
-	c.HTML(http.StatusOK, "logs.html", gin.H{
-		"title": "Query Logs",
-		"logs":  logs,
-		"pagination": gin.H{
-			"page":       page,
-			"limit":      limit,
-			"total":      total,
-			"totalPages": totalPages,
-		},
 	})
 }
 
@@ -567,11 +536,52 @@ func (h *Handlers) GetRawResponse(c *gin.Context) {
 	c.String(http.StatusOK, queryLog.RawResponse)
 }
 
+// ViewLogs displays query logs page
+func (h *Handlers) ViewLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit := 20
+	offset := (page - 1) * limit
+
+	var logs []database.QueryLog
+	var total int64
+
+	// Get total count
+	h.db.Model(&database.QueryLog{}).Count(&total)
+
+	// Fetch logs
+	h.db.Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&logs)
+
+	totalPages := int(total) / limit
+	if int(total)%limit > 0 {
+		totalPages++
+	}
+
+	// Calculate prev and next pages
+	prevPage := page - 1
+	nextPage := page + 1
+
+	c.HTML(http.StatusOK, "logs.html", gin.H{
+		"title": "Query Logs",
+		"logs":  logs,
+		"pagination": gin.H{
+			"page":       page,
+			"limit":      limit,
+			"total":      total,
+			"totalPages": totalPages,
+			"prevPage":   prevPage,
+			"nextPage":   nextPage,
+		},
+	})
+}
+
 // Helper functions
 
 func getCaseTypes() []string {
 	return []string{
-		"CS", "CC", "CRL.M.C", "CRL.A", "CRL.REV.P",
+		"BAIL APPLN.", "CS", "CC", "CRL.M.C", "CRL.A", "CRL.REV.P",
 		"FAO", "RFA", "RSA", "CR", "EXEC",
 	}
 }

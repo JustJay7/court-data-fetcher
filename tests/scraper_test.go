@@ -14,7 +14,7 @@ import (
 func TestScraperInitialization(t *testing.T) {
 	// Create test config
 	cfg := &config.Config{
-		CourtBaseURL:   "https://districts.ecourts.gov.in/delhi",
+		CourtBaseURL:   "https://delhihighcourt.nic.in",
 		HeadlessMode:   true,
 		ScraperTimeout: 30 * time.Second,
 		UserAgent:      "Test User Agent",
@@ -91,7 +91,7 @@ func TestConcurrentScraping(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		CourtBaseURL:         "https://districts.ecourts.gov.in/delhi",
+		CourtBaseURL:         "https://delhihighcourt.nic.in",
 		HeadlessMode:         true,
 		ScraperTimeout:       30 * time.Second,
 		MaxConcurrentScrapes: 3,

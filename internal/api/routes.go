@@ -1,6 +1,8 @@
 package api
 
 import (
+	"time"
+	
 	"github.com/gin-gonic/gin"
 	"github.com/JustJay7/court-data-fetcher/internal/cache"
 	"github.com/JustJay7/court-data-fetcher/internal/config"
@@ -17,13 +19,29 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, cache cache.Cache, scraper *sc
 	// Serve static files
 	router.Static("/static", "./web/static")
 
+	// Test endpoints
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Server is running",
+			"time": time.Now().Unix(),
+		})
+	})
+	
+	// Simple test without scraper
+	router.GET("/test-simple", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "ok",
+			"court_url": cfg.CourtBaseURL,
+			"court_name": cfg.CourtName,
+		})
+	})
+
 	// HTML routes
 	router.GET("/", h.HomePage)
 	router.POST("/search", h.SearchCase)
 	router.GET("/results/:id", h.ViewResults)
 	router.GET("/captcha", h.CaptchaPage)
-	router.GET("/logs", h.ViewLogs)id", h.ViewResults)
-	router.GET("/captcha", h.CaptchaPage)id", h.ViewResults)
+	router.GET("/logs", h.ViewLogs)
 
 	// API routes
 	api := router.Group("/api")
@@ -55,4 +73,12 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB, cache cache.Cache, scraper *sc
 
 	// Load HTML templates
 	router.LoadHTMLGlob("web/templates/*")
+	
+	// Debug: List loaded templates
+	router.GET("/debug/templates", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Templates should be loaded",
+			"path": "web/templates/*",
+		})
+	})
 }

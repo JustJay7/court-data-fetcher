@@ -61,7 +61,7 @@ func Load() (*Config, error) {
 		DatabasePath: getEnv("DATABASE_PATH", "./data/court_cases.db"),
 		LogLevel:     getEnv("LOG_LEVEL", "info"),
 		LogFormat:    getEnv("LOG_FORMAT", "json"),
-		CourtBaseURL: getEnv("COURT_BASE_URL", "https://districts.ecourts.gov.in/delhi"),
+		CourtBaseURL: getEnv("COURT_BASE_URL", "https://delhihighcourt.nic.in"),
 		CourtName:    getEnv("COURT_NAME", "Delhi District Courts"),
 		UserAgent:    getEnv("USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"),
 		BrowserPath:  getEnv("ROD_BROWSER_PATH", ""),

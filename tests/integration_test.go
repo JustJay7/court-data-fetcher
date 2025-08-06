@@ -19,7 +19,7 @@ func TestDelhiDistrictCourtIntegration(t *testing.T) {
 
 	// Test configuration
 	cfg := &config.Config{
-		CourtBaseURL:   "https://districts.ecourts.gov.in/delhi",
+		CourtBaseURL:   "https://delhihighcourt.nic.in",
 		HeadlessMode:   false, // Set to false to see what's happening
 		ScraperTimeout: 60 * time.Second,
 		UserAgent:      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",

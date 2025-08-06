@@ -18,7 +18,7 @@ import (
 // Scraper handles web scraping operations
 type Scraper struct {
 	cfg      *config.Config
-	browser  *rod.Browser
+	Browser  *rod.Browser // Made public for testing
 	mu       sync.Mutex
 	logger   *logger.Logger
 	sessions map[string]*rod.Page
@@ -53,7 +53,7 @@ func NewScraper(cfg *config.Config, logger *logger.Logger) (*Scraper, error) {
 
 	return &Scraper{
 		cfg:      cfg,
-		browser:  browser,
+		Browser:  browser,
 		logger:   logger,
 		sessions: make(map[string]*rod.Page),
 	}, nil
@@ -68,7 +68,7 @@ func (s *Scraper) Close() error {
 		page.MustClose()
 	}
 
-	return s.browser.Close()
+	return s.Browser.Close()
 }
 
 // SearchCase searches for a case and returns the parsed information
@@ -85,67 +85,100 @@ func (s *Scraper) SearchCase(ctx context.Context, caseType, caseNumber, filingYe
 	searchCtx, cancel := context.WithTimeout(ctx, s.cfg.ScraperTimeout)
 	defer cancel()
 
-	// Navigate to Delhi District Court e-Courts website
-	courtURL := s.cfg.CourtBaseURL + "/case-status"
+	// Navigate to Delhi High Court case status page
+	courtURL := s.cfg.CourtBaseURL + "/app/get-case-type-status"
 	s.logger.Info("Navigating to court website", "url", courtURL)
 	
-	err = page.Context(searchCtx).Navigate(courtURL)
+	// Set a shorter timeout for navigation
+	navCtx, navCancel := context.WithTimeout(searchCtx, 15*time.Second)
+	defer navCancel()
+	
+	err = page.Context(navCtx).Navigate(courtURL)
 	if err != nil {
+		s.logger.Error("Navigation failed", "url", courtURL, "error", err)
 		return nil, "", fmt.Errorf("failed to navigate: %w", err)
 	}
+	s.logger.Debug("Navigation successful, waiting for page load")
 
-	// Wait for page to load completely
-	err = page.WaitLoad()
+	// Wait for page to load with timeout
+	loadCtx, loadCancel := context.WithTimeout(searchCtx, 10*time.Second)
+	defer loadCancel()
+	
+	err = page.Context(loadCtx).WaitLoad()
 	if err != nil {
-		return nil, "", fmt.Errorf("page load timeout: %w", err)
+		s.logger.Error("Page load timeout", "error", err)
+		// Continue anyway as the page might be partially loaded
 	}
+	s.logger.Debug("Page loaded, checking for elements")
 
-	// Wait for the case status tab/link
-	s.logger.Debug("Looking for case status link")
-	
-	// Click on Case Status tab if not already there
-	caseStatusLinks := page.MustElements("a")
-	var caseStatusTab *rod.Element
-	for _, link := range caseStatusLinks {
-		text, _ := link.Text()
-		if strings.Contains(text, "Case Status") {
-			caseStatusTab = link
-			break
-		}
-	}
-	if caseStatusTab != nil {
-		caseStatusTab.MustClick()
-		page.MustWaitNavigation()
-	}
+	// Get page info
+	info := page.MustInfo()
+	s.logger.Info("Page info", "url", info.URL)
 
-	// Select search by Case Number
-	searchBySelect := page.MustElement("select[name='search_by']")
-	searchBySelect.MustSelect("casenumber")
+	// Wait a bit for JavaScript to load
+	time.Sleep(3 * time.Second)
+
+	// Delhi High Court form structure
+	// Wait for form elements to be ready
+	s.logger.Debug("Waiting for form elements")
+	time.Sleep(3 * time.Second)
 	
-	// Wait for form to update
+	// Fill Case Type
+	s.logger.Debug("Looking for case type dropdown")
+	caseTypeSelect, err := page.Element("#case_type")
+	if err != nil {
+		s.logger.Error("Case type select not found", "error", err)
+		html, _ := page.HTML()
+		return nil, html, fmt.Errorf("case type select not found: %w", err)
+	}
+	caseTypeSelect.MustSelect(caseType)
+	s.logger.Debug("Selected case type", "type", caseType)
 	time.Sleep(1 * time.Second)
-
-	// Fill the form with actual Delhi District Court fields
-	s.logger.Debug("Filling search form")
 	
-	// Select District (for Delhi courts)
-	districtSelect := page.MustElement("select[name='district_code']")
-	districtSelect.MustSelect("1") // Delhi District code
-	
-	// Select Court Complex
-	page.MustWaitIdle()
-	complexSelect := page.MustElement("select[name='court_complex_code']")
-	complexSelect.MustSelect("1") // Default complex
-	
-	// Enter case details
-	caseTypeInput := page.MustElement("input[name='case_type']")
-	caseTypeInput.MustInput(caseType)
-	
-	caseNumberInput := page.MustElement("input[name='case_no']")
+	// Fill Case Number
+	s.logger.Debug("Looking for case number input")
+	caseNumberInput, err := page.Element("#case_number")
+	if err != nil {
+		s.logger.Error("Case number input not found", "error", err)
+		html, _ := page.HTML()
+		return nil, html, fmt.Errorf("case number input not found: %w", err)
+	}
 	caseNumberInput.MustInput(caseNumber)
+	s.logger.Debug("Entered case number", "number", caseNumber)
+	time.Sleep(1 * time.Second)
 	
-	caseYearInput := page.MustElement("input[name='case_year']")
-	caseYearInput.MustInput(filingYear)
+	// Fill Year
+	s.logger.Debug("Looking for year dropdown")
+	yearSelect, err := page.Element("#case_year")
+	if err != nil {
+		s.logger.Error("Year select not found", "error", err)
+		html, _ := page.HTML()
+		return nil, html, fmt.Errorf("year select not found: %w", err)
+	}
+	yearSelect.MustSelect(filingYear)
+	s.logger.Debug("Selected year", "year", filingYear)
+	time.Sleep(1 * time.Second)
+	
+	// Handle CAPTCHA before submission
+	s.logger.Debug("Checking for CAPTCHA")
+	captchaCode, err := page.Element("#captcha-code")
+	if err == nil {
+		// CAPTCHA exists - read the displayed code
+		captchaText, _ := captchaCode.Text()
+		s.logger.Info("CAPTCHA found", "code", captchaText)
+		
+		// Enter CAPTCHA
+		captchaInput, err := page.Element("#captchaInput")
+		if err == nil {
+			captchaInput.MustInput(captchaText)
+			s.logger.Debug("Entered CAPTCHA", "code", captchaText)
+			time.Sleep(1 * time.Second)
+		} else {
+			s.logger.Warn("CAPTCHA input not found", "error", err)
+		}
+	} else {
+		s.logger.Debug("No CAPTCHA found on page")
+	}
 
 	// Handle CAPTCHA before submission
 	if err := s.handleCaptcha(page); err != nil {
@@ -153,9 +186,20 @@ func (s *Scraper) SearchCase(ctx context.Context, caseType, caseNumber, filingYe
 	}
 
 	// Submit form
-	s.logger.Debug("Submitting search form")
-	submitBtn := page.MustElement("input[type='submit'][value='Search']")
+	s.logger.Debug("Looking for submit button")
+	submitBtn, err := page.Element("#search")
+	if err != nil {
+		s.logger.Error("Submit button not found", "error", err)
+		html, _ := page.HTML()
+		return nil, html, fmt.Errorf("submit button not found: %w", err)
+	}
+	
+	s.logger.Debug("Clicking submit button")
 	submitBtn.MustClick()
+	
+	// Wait for results
+	s.logger.Debug("Waiting for results after submission")
+	time.Sleep(5 * time.Second)
 
 	// Wait for results
 	page.MustWaitNavigation()
@@ -192,7 +236,7 @@ func (s *Scraper) getOrCreatePage(ctx context.Context) (*rod.Page, error) {
 		return page, nil
 	}
 
-	page, err := s.browser.Page(proto.TargetCreateTarget{})
+	page, err := s.Browser.Page(proto.TargetCreateTarget{})
 	if err != nil {
 		return nil, err
 	}
